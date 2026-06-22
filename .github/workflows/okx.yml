@@ -2,7 +2,7 @@ name: OKX Coin Alert
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/13 * * * *"
   workflow_dispatch:
 
 jobs:
