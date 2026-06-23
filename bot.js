@@ -5,7 +5,7 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
 
 const STATE_FILE = "./state.json";
-const COOLDOWN = 8 * 60 * 60 * 1000;
+const COOLDOWN = 2 * 60 * 60 * 1000;
 
 // ================= STATE =================
 function loadState() {
@@ -100,7 +100,7 @@ async function run() {
 
       if (chg4h <= -5 || chg4h >= 5) continue;
 
-      // cooldown 8h
+      // cooldown 2h
       if (!canSend(state[symbol])) continue;
 
       alerts.push({
