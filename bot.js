@@ -22,11 +22,14 @@ function saveState(state) {
 
 // ================= TELEGRAM =================
 async function sendTelegram(text) {
-  await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-    chat_id: CHAT_ID,
-    text,
-    parse_mode: "Markdown"
-  });
+  await axios.post(
+    `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,
+    {
+      chat_id: CHAT_ID,
+      text,
+      parse_mode: "Markdown"
+    }
+  );
 }
 
 // ================= COOLDOWN =================
@@ -40,16 +43,18 @@ async function getTickers() {
   const res = await axios.get(
     "https://www.okx.com/api/v5/market/tickers?instType=SPOT"
   );
+
   return res.data.data || [];
 }
 
-// ================= CANDLE CHANGE =================
+// ================= CHANGE =================
 async function getChange(instId, bar) {
   const res = await axios.get(
     `https://www.okx.com/api/v5/market/candles?instId=${instId}&bar=${bar}&limit=2`
   );
 
   const d = res.data.data;
+
   if (!d || d.length < 2) return null;
 
   const open = Number(d[1][1]);
@@ -66,7 +71,7 @@ async function run() {
 
   const tickers = await getTickers();
 
-  // 🔥 CHANGE HERE: TOP 10 instead of TOP 5
+  // Chỉ lấy coin tăng >7% trong 24h
   const usdtCoins = tickers
     .filter(t => t.instId.endsWith("-USDT"))
     .map(t => {
@@ -74,15 +79,17 @@ async function run() {
       const open24h = Number(t.open24h);
 
       const change24h =
-        open24h > 0 ? ((last - open24h) / open24h) * 100 : 0;
+        open24h > 0
+          ? ((last - open24h) / open24h) * 100
+          : 0;
 
       return {
         instId: t.instId,
         change24h
       };
     })
-    .sort((a, b) => b.change24h - a.change24h)
-    .slice(0, 10); // 🔥 TOP 10
+    .filter(c => c.change24h > 7)
+    .sort((a, b) => b.change24h - a.change24h);
 
   let alerts = [];
 
@@ -90,27 +97,35 @@ async function run() {
     const symbol = coin.instId;
 
     try {
-      // 15m > 3%
+      // 15 phút > 2%
       const chg15m = await getChange(symbol, "15m");
-      if (chg15m === null || chg15m <= 3) continue;
 
-      // 4h -5% to +5%
-      const chg4h = await getChange(symbol, "4H");
-      if (chg4h === null) continue;
+      if (chg15m === null || chg15m <= 2) continue;
 
-      if (chg4h <= -5 || chg4h >= 5) continue;
+      // Biến động 2 giờ
+      const chg2h = await getChange(symbol, "2H");
 
-      // cooldown 2h
+      if (chg2h === null) continue;
+
+      // Điều kiện mới:
+      // -5 < (2h - 15m) < +5
+      const diff = chg2h - chg15m;
+
+      if (diff <= -5 || diff >= 5) continue;
+
+      // Cooldown 2 giờ
       if (!canSend(state[symbol])) continue;
 
       alerts.push({
         symbol,
+        change24h: coin.change24h,
         chg15m,
-        chg4h,
-        change24h: coin.change24h
+        chg2h,
+        diff
       });
 
       state[symbol] = Date.now();
+
     } catch (e) {
       continue;
     }
@@ -120,13 +135,14 @@ async function run() {
 
   if (alerts.length === 0) return;
 
-  let msg = `🚨 *OKX ALERT (TOP 10 24H)*\n\n`;
+  let msg = `🚨 *OKX ALERT (>7% 24H)*\n\n`;
 
   for (const a of alerts) {
     msg += `🪙 ${a.symbol}\n`;
     msg += `24h: +${a.change24h.toFixed(2)}%\n`;
     msg += `15m: +${a.chg15m.toFixed(2)}%\n`;
-    msg += `4h: ${a.chg4h.toFixed(2)}%\n\n`;
+    msg += `2h: ${a.chg2h.toFixed(2)}%\n`;
+    msg += `2h-15m: ${a.diff.toFixed(2)}%\n\n`;
   }
 
   await sendTelegram(msg);
