@@ -103,7 +103,7 @@ async function runBot() {
         const change4h = await getChange(instId, "4H", 1);
 
         const condition1 = change15m > 4;
-        const condition2 = change4h > -5 && change4h < 5;
+        const condition2 = change4h < 10;
 
         if (condition1 && condition2) {
           // chống spam 2h
