@@ -91,11 +91,11 @@ async function runBot() {
     const now = Date.now();
 
     const coins = await getAllCoins();
-    const top50 = getTop50Volatile(coins);
+    const top25 = getTop25Volatile(coins);
 
     let results = [];
 
-    for (const coin of top50) {
+    for (const coin of top25) {
       const instId = coin.instId;
 
       try {
