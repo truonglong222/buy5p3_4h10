@@ -48,7 +48,7 @@ async function getAllCoins() {
 // =====================
 // Sort by volatility (24h)
 // =====================
-function getTop50Volatile(coins) {
+function getTop25Volatile(coins) {
   return coins
     .filter(c => c.instId && c.last && c.open24h)
     .map(c => {
@@ -63,7 +63,7 @@ function getTop50Volatile(coins) {
       };
     })
     .sort((a, b) => b.change24h - a.change24h)
-    .slice(0, 50);
+    .slice(0, 25);
 }
 
 // =====================
