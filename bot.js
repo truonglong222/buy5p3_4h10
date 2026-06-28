@@ -5,13 +5,12 @@ const BOT_TOKEN = process.env.BOT_TOKEN || "BOT_TOKEN";
 const CHAT_ID = process.env.CHAT_ID || "CHAT_ID";
 
 const TELEGRAM_URL = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
-const OKX_TICKERS = "https://www.okx.com/api/v5/market/tickers?instType=SWAP";
 
 const CACHE_FILE = "./sent_cache.json";
 
-// =====================
-// Load / Save cache
-// =====================
+// ===========================
+// Cache
+// ===========================
 function loadCache() {
   if (!fs.existsSync(CACHE_FILE)) return {};
   try {
@@ -25,113 +24,131 @@ function saveCache(cache) {
   fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2));
 }
 
-// =====================
-// Telegram send
-// =====================
-async function sendTelegram(message) {
-  await axios.post(TELEGRAM_URL, {
-    chat_id: CHAT_ID,
-    text: message,
-    parse_mode: "HTML",
-    disable_web_page_preview: true,
-  });
-}
-
-// =====================
-// Get all swap coins
-// =====================
-async function getAllCoins() {
-  const res = await axios.get(OKX_TICKERS);
-  return res.data.data;
-}
-
-// =====================
-// Sort by volatility (24h)
-// =====================
-function getTop25Volatile(coins) {
-  return coins
-    .filter(c => c.instId && c.last && c.open24h)
-    .map(c => {
-      const change24h =
-        ((parseFloat(c.last) - parseFloat(c.open24h)) /
-          parseFloat(c.open24h)) *
-        100;
-
-      return {
-        instId: c.instId,
-        change24h: Math.abs(change24h),
-      };
-    })
-    .sort((a, b) => b.change24h - a.change24h)
-    .slice(0, 25);
-}
-
-// =====================
-// Get candle change
-// =====================
-async function getChange(instId, bar = "15m", periods = 1) {
-  const url = `https://www.okx.com/api/v5/market/candles?instId=${instId}&bar=${bar}&limit=${periods}`;
-  const res = await axios.get(url);
-
-  if (!res.data.data || res.data.data.length === 0) return 0;
-
-  const candle = res.data.data[0];
-  const open = parseFloat(candle[1]);
-  const close = parseFloat(candle[4]);
-
-  return ((close - open) / open) * 100;
-}
-
-// =====================
-// Main logic
-// =====================
-async function runBot() {
-  try {
-    const cache = loadCache();
-    const now = Date.now();
-
-    const coins = await getAllCoins();
-    const top25 = getTop25Volatile(coins);
-
-    let results = [];
-
-    for (const coin of top25) {
-      const instId = coin.instId;
-
-      try {
-        const change15m = await getChange(instId, "15m", 1);
-        const change4h = await getChange(instId, "4H", 1);
-
-        const condition1 = change15m > 4;
-        const condition2 = change4h < 10;
-
-        if (condition1 && condition2) {
-          // chống spam 2h
-          if (cache[instId] && now - cache[instId] < 2 * 60 * 60 * 1000) {
-            continue;
-          }
-
-          cache[instId] = now;
-
-          results.push(
-            `🚀 BUY SIGNAL\nCoin: ${instId}\n15m: ${change15m.toFixed(
-              2
-            )}%\n4h: ${change4h.toFixed(2)}%`
-          );
-        }
-      } catch (e) {
-        continue;
-      }
+function cleanCache(cache) {
+  const now = Date.now();
+  for (const coin in cache) {
+    if (now - cache[coin] > 2 * 60 * 60 * 1000) {
+      delete cache[coin];
     }
-
-    if (results.length > 0) {
-      await sendTelegram(results.join("\n\n"));
-      saveCache(cache);
-    }
-  } catch (err) {
-    console.error("Bot error:", err.message);
   }
 }
 
-// Run
-runBot();
+const cache = loadCache();
+cleanCache(cache);
+
+// ===========================
+// Telegram
+// ===========================
+async function sendTelegram(text) {
+  await axios.post(TELEGRAM_URL, {
+    chat_id: CHAT_ID,
+    text,
+    parse_mode: "HTML",
+  });
+}
+
+// ===========================
+// Get Top 50 Futures
+// ===========================
+async function getTop50() {
+  const url =
+    "https://www.okx.com/api/v5/market/tickers?instType=SWAP";
+
+  const res = await axios.get(url);
+
+  return res.data.data
+    .filter((c) => c.instId.endsWith("-USDT-SWAP"))
+    .sort(
+      (a, b) =>
+        Math.abs(parseFloat(b.change24h)) -
+        Math.abs(parseFloat(a.change24h))
+    )
+    .slice(0, 50);
+}
+
+// ===========================
+// Get Candles
+// ===========================
+async function getCandles(instId, bar, limit = 2) {
+  const url = `https://www.okx.com/api/v5/market/history-candles?instId=${instId}&bar=${bar}&limit=${limit}`;
+  const res = await axios.get(url);
+  return res.data.data;
+}
+
+// ===========================
+// Calculate Change
+// ===========================
+function percent(open, close) {
+  return ((close - open) / open) * 100;
+}
+
+// ===========================
+// Main
+// ===========================
+async function main() {
+  try {
+    const coins = await getTop50();
+
+    for (const coin of coins) {
+      try {
+        const symbol = coin.instId;
+
+        // ---------- 5m ----------
+        const c5 = await getCandles(symbol, "5m", 2);
+
+        if (c5.length < 2) continue;
+
+        const open5 = parseFloat(c5[1][1]);
+        const close5 = parseFloat(c5[0][4]);
+
+        const change5 = percent(open5, close5);
+
+        if (change5 <= 3) continue;
+
+        // ---------- 4H ----------
+        const c4h = await getCandles(symbol, "4H", 2);
+
+        if (c4h.length < 2) continue;
+
+        const open4 = parseFloat(c4h[1][1]);
+        const close4 = parseFloat(c4h[0][4]);
+
+        const change4 = percent(open4, close4);
+
+        if (change4 >= 10) continue;
+
+        // ---------- Duplicate within 2h ----------
+        if (
+          cache[symbol] &&
+          Date.now() - cache[symbol] < 2 * 60 * 60 * 1000
+        ) {
+          continue;
+        }
+
+        const price = parseFloat(coin.last).toFixed(6);
+
+        const msg =
+`🚀 Buy
+
+Coin: <b>${symbol}</b>
+
+Price: ${price}
+
+5m: +${change5.toFixed(2)}%
+4H: +${change4.toFixed(2)}%`;
+
+        await sendTelegram(msg);
+
+        cache[symbol] = Date.now();
+        saveCache(cache);
+
+      } catch (e) {
+        console.log("Skip:", coin.instId);
+      }
+    }
+  } catch (err) {
+    console.error(err.message);
+  }
+}
+
+main();
