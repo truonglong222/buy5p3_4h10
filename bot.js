@@ -116,7 +116,7 @@ async function checkCoin(symbol, change24) {
         // 4. Check trùng trong vòng 2 giờ
         if (wasSentRecently(symbol)) return;
 
-        // 5. Tạo link giao dịch Futures (Chuyển "BTC-USDT-SWAP" thành "btc-usdt")
+        // 5. Tạo link giao dịch Futures chuẩn OKX (Ví dụ: "ACT-USDT-SWAP" -> "act-usdt")
         const tradeSlug = symbol.replace("-SWAP", "").toLowerCase();
         const tradeUrl = `https://www.okx.com/trade-swap/${tradeSlug}`;
 
@@ -147,6 +147,5 @@ async function main() {
         console.error("Main Process Error:", e.message);
     }
 }
-
 // Chạy bot
 main();
