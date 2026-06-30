@@ -90,15 +90,15 @@ function percent(open, close) {
 // ================= MAIN =================
 async function checkCoin(symbol, change24) {
     try {
-        // 1. Check nến 5m (Giữ nguyên lấy nến [0] đang chạy)
-        const candles5 = await getCandles(symbol, "5m", 2);
-        if (candles5.length < 1) return;
+        // 1. ĐÃ SỬA: Check nến 15m (Thay vì 5m như trước)
+        const candles15 = await getCandles(symbol, "15m", 2);
+        if (candles15.length < 1) return;
 
-        const c5 = candles5[0]; 
-        const change5 = percent(Number(c5[1]), Number(c5[4]));
+        const c15 = candles15[0]; 
+        const change15 = percent(Number(c15[1]), Number(c15[4]));
 
-        // Nến 5m hiện tại phải tăng mạnh > 3%
-        if (change5 <= 3) return;
+        // Nến 15m hiện tại phải tăng mạnh > 3%
+        if (change15 <= 3) return;
 
         // 2. Check nến 2H (Giữ nguyên lấy nến [0] đang chạy)
         const candles2h = await getCandles(symbol, "2H", 1);
@@ -116,13 +116,13 @@ async function checkCoin(symbol, change24) {
         // 4. Check trùng trong vòng 2 giờ
         if (wasSentRecently(symbol)) return;
 
-        // 5. Tạo link giao dịch Futures chuẩn OKX (Ví dụ: "ACT-USDT-SWAP" -> "act-usdt")
+        // 5. ĐÃ SỬA: Tạo link giao dịch chuẩn hóa ngôn ngữ (vi) tránh lỗi redirect về BTC mặc định của OKX
         const tradeSlug = symbol.replace("-SWAP", "").toLowerCase();
-        const tradeUrl = `https://www.okx.com/trade-swap/${tradeSlug}`;
+        const tradeUrl = `https://www.okx.com/vi/trade-swap/${tradeSlug}`;
 
         const msg = `🟢 <b>Buy Signal (Futures)</b>\n\n` +
                     `Coin: <a href="${tradeUrl}"><b>${symbol}</b></a>\n\n` +
-                    `5m (Hiện tại): <b>${change5.toFixed(2)}%</b>\n` +
+                    `15m (Hiện tại): <b>${change15.toFixed(2)}%</b>\n` +
                     `2H (Hiện tại): <b>${change2h.toFixed(2)}%</b>\n` +
                     `24H: <b>${change24.toFixed(2)}%</b>\n\n` +
                     `🔗 <a href="${tradeUrl}">Mở đồ thị & Giao dịch trên OKX</a>`;
